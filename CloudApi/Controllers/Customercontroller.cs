@@ -2,137 +2,148 @@
 using Infrastructure.Database;
 using CloudApi.Entity;
 
-namespace BankingApi.Controllers
+[ApiController]
+[Route("api/[controller]")]
+public class CustomersController : ControllerBase
 {
-    [ApiController] 
-    [Route("api/[controller]")]
-    public class CustomersController : ControllerBase
+    private readonly ICustomerService _customerService;
+    private readonly IWebHostEnvironment _env;
+
+    public CustomersController(ICustomerService customerService, DbContext dbContext, IWebHostEnvironment env)
     {
-        private readonly ICustomerService _customerService;
-        private readonly DbContext _dbContext;
-        private readonly IWebHostEnvironment _env;
+        _customerService = customerService;
+        _env = env;
+    }
 
-        public CustomersController(ICustomerService customerService, DbContext dbContext, IWebHostEnvironment env)
+    [HttpPost]
+    public async Task<IActionResult> Create([FromForm] Customer customer)
+    {
+        try
         {
-            _customerService = customerService;
-            _dbContext = dbContext;
-            _env = env;
-        }
-
-        [HttpPost]
-        public async Task<IActionResult> Create([FromForm] Customer customer)
-        {
-            try
+            if (customer.Avatar is not null && customer.Avatar.Length > 0)
             {
-                if (Request.Form.Files.Count > 0)
+                var uploads = Path.Combine(_env.ContentRootPath, "Uploads");
+                if (!Directory.Exists(uploads))
+                    Directory.CreateDirectory(uploads);
+
+                var fileName = $"{Guid.NewGuid()}{Path.GetExtension(customer.Avatar.FileName)}";
+                var filePath = Path.Combine(uploads, fileName);
+
+                using (var fs = new FileStream(filePath, FileMode.Create))
+                    await customer.Avatar.CopyToAsync(fs);
+
+                customer.AvatarPath = $"/Uploads/{fileName}";
+            }
+
+            var created = await _customerService.CreateAsync(customer);
+            return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = ex.Message });
+        }
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> GetAll()
+    {
+        try
+        {
+            return Ok(await _customerService.GetAllAsync());
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = ex.Message });
+        }
+    }
+
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetById(int id)
+    {
+        try
+        {
+            var customer = await _customerService.GetByIdAsync(id);
+            return customer == null ? NotFound() : Ok(customer);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = ex.Message });
+        }
+    }
+
+    [HttpPut("{id}")]
+    public async Task<IActionResult> Update(int id, [FromForm] Customer data)
+    {
+        try
+        {
+            var customer = await _customerService.GetByIdAsync(id);
+            if (customer == null)
+                return NotFound();
+
+            customer.Name = data.Name;
+            customer.Email = data.Email;
+            customer.Phone = data.Phone;
+            customer.Address = data.Address;
+
+            if (data.Avatar is not null)
+            {
+                var uploadFolder = Path.Combine(_env.ContentRootPath, "Uploads");
+                if (!Directory.Exists(uploadFolder))
+                    Directory.CreateDirectory(uploadFolder);
+
+                var newName = $"{Guid.NewGuid()}{Path.GetExtension(data.Avatar.FileName)}";
+                var newPath = Path.Combine(uploadFolder, newName);
+
+                using (var fs = new FileStream(newPath, FileMode.Create))
+                    await data.Avatar.CopyToAsync(fs);
+
+                if (!string.IsNullOrWhiteSpace(customer.AvatarPath))
                 {
-                    var file = Request.Form.Files[0];
-                    var uploads = Path.Combine(_env.ContentRootPath, "Uploads");
-                    if (!Directory.Exists(uploads)) Directory.CreateDirectory(uploads);
-                    var fileName = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
-                    var path = Path.Combine(uploads, fileName);
-                    using var stream = new FileStream(path, FileMode.Create);
-                    await file.CopyToAsync(stream);
-                    customer.Avatar = $"/Uploads/{fileName}";
+                    var oldPath = Path.Combine(
+                        _env.ContentRootPath,
+                        customer.AvatarPath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar)
+                    );
+
+                    if (System.IO.File.Exists(oldPath))
+                        System.IO.File.Delete(oldPath);
                 }
 
-                var created = await _customerService.CreateAsync(customer);
-                return CreatedAtAction("GetById", new { id = created.Id }, created);
+                customer.AvatarPath = $"/Uploads/{newName}";
             }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { message = ex.Message });
-            }
+
+            return Ok(await _customerService.UpdateAsync(customer));
         }
-
-        [HttpGet]
-        public async Task<IActionResult> GetAll()
+        catch (Exception ex)
         {
-            try
-            {
-                var list = await _customerService.GetAllAsync();
-                return Ok(list);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { message = ex.Message });
-            }
+            return StatusCode(500, new { message = ex.Message });
         }
+    }
 
-        [HttpGet("{id}")]
-        public async Task<IActionResult> GetById(int id)
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> Delete(int id)
+    {
+        try
         {
-            try
+            var customer = await _customerService.GetByIdAsync(id);
+            if (customer == null) return NotFound();
+
+            if (!string.IsNullOrWhiteSpace(customer.AvatarPath))
             {
-                var customer = await _customerService.GetByIdAsync(id);
-                if (customer == null) return NotFound();
-                return Ok(customer);
+                var oldPath = Path.Combine(
+                    _env.ContentRootPath,
+                    customer.AvatarPath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar)
+                );
+
+                if (System.IO.File.Exists(oldPath))
+                    System.IO.File.Delete(oldPath);
             }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { message = ex.Message });
-            }
+
+            var deleted = await _customerService.DeleteAsync(id);
+            return deleted ? NoContent() : NotFound();
         }
-
-        [HttpPut("{id}")]
-        public async Task<IActionResult> Update(int id, [FromForm] Customer customer)
+        catch (Exception ex)
         {
-            try
-            {
-                var existing = await _customerService.GetByIdAsync(id);
-                if (existing == null) return NotFound();
-
-                existing.Name = customer.Name;
-                existing.Email = customer.Email;
-                existing.Phone = customer.Phone;
-                existing.Address = customer.Address;
-
-                if (Request.Form.Files.Count > 0)
-                {
-                    var file = Request.Form.Files[0];
-                    var uploads = Path.Combine(_env.ContentRootPath, "Uploads");
-                    if (!Directory.Exists(uploads)) Directory.CreateDirectory(uploads);
-                    var fileName = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
-                    var path = Path.Combine(uploads, fileName);
-                    using var stream = new FileStream(path, FileMode.Create);
-                    await file.CopyToAsync(stream);
-                    if (!string.IsNullOrEmpty(existing.Avatar))
-                    {
-                        var oldPath = Path.Combine(_env.ContentRootPath, existing.Avatar.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
-                        if (System.IO.File.Exists(oldPath)) System.IO.File.Delete(oldPath);
-                    }
-                    existing.Avatar = $"/Uploads/{fileName}";
-                }
-
-                var updated = await _customerService.UpdateAsync(existing);
-                return Ok(updated);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { message = ex.Message });
-            }
-        }
-
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> Delete(int id)
-        {
-            try
-            {
-                var existing = await _customerService.GetByIdAsync(id);
-                if (existing == null) return NotFound();
-                if (!string.IsNullOrEmpty(existing.Avatar))
-                {
-                    var path = Path.Combine(_env.ContentRootPath, existing.Avatar.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
-                    if (System.IO.File.Exists(path)) System.IO.File.Delete(path);
-                }
-                var deleted = await _customerService.DeleteAsync(id);
-                if (!deleted) return NotFound();
-                return NoContent();
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { message = ex.Message });
-            }
+            return StatusCode(500, new { message = ex.Message });
         }
     }
 }

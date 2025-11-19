@@ -1,96 +1,91 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using CloudApi.Entity;
+﻿using CloudApi.Entity;
+using Microsoft.AspNetCore.Mvc;
 
-namespace BankingApi.Controllers
+[ApiController]
+[Route("api/accounts")]
+public class AccountsController : ControllerBase
 {
-    [ApiController]
-    [Route("api/[controller]")]
-    public class AccountsController : ControllerBase
+    private readonly IAccountService _service;
+
+    public AccountsController(IAccountService service)
     {
-        private readonly IAccountService _accountService;
+        _service = service;
+    }
 
-        public AccountsController(IAccountService accountService)
+    [HttpGet]
+    public async Task<IActionResult> FetchAll()
+    {
+        try
         {
-            _accountService = accountService;
+            var list = await _service.GetAllAsync();
+            return Ok(list);
         }
-
-        [HttpGet]
-        public async Task<IActionResult> GetAll()
+        catch (Exception e)
         {
-            try
-            {
-                var accounts = await _accountService.GetAllAsync();
-                return Ok(accounts);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { message = ex.Message });
-            }
+            return StatusCode(500, new { error = e.Message });
         }
+    }
 
-        [HttpGet("{id}")]
-        public async Task<IActionResult> GetById(int id)
+    [HttpGet("{id}")]
+    public async Task<IActionResult> FetchOne(int id)
+    {
+        try
         {
-            try
-            {
-                var account = await _accountService.GetByIdAsync(id);
-                if (account == null) return NotFound();
-                return Ok(account);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { message = ex.Message });
-            }
+            var acc = await _service.GetByIdAsync(id);
+            return acc == null ? NotFound() : Ok(acc);
         }
-
-        [HttpPost]
-        public async Task<IActionResult> Create([FromBody] Account account)
+        catch (Exception e)
         {
-            try
-            {
-                var created = await _accountService.CreateAsync(account);
-                return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { message = ex.Message });
-            }
+            return StatusCode(500, new { error = e.Message });
         }
+    }
 
-        [HttpPut("{id}")]
-        public async Task<IActionResult> Update(int id, [FromBody] Account account)
+    [HttpPost]
+    public async Task<IActionResult> Add([FromBody] Account req)
+    {
+        try
         {
-            try
-            {
-                var existing = await _accountService.GetByIdAsync(id);
-                if (existing == null) return NotFound();
-
-                existing.AccountType = account.AccountType;
-                existing.Balance = account.Balance;
-                existing.CustomerId = account.CustomerId;
-
-                var updated = await _accountService.UpdateAsync(existing);
-                return Ok(updated);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { message = ex.Message });
-            }
+            var created = await _service.CreateAsync(req);
+            return CreatedAtAction(nameof(FetchOne), new { id = created.Id }, created);
         }
-
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> Delete(int id)
+        catch (Exception e)
         {
-            try
-            {
-                var deleted = await _accountService.DeleteAsync(id);
-                if (!deleted) return NotFound();
-                return NoContent();
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { message = ex.Message });
-            }
+            return BadRequest(new { error = e.Message });
+        }
+    }
+
+    [HttpPut("{id}")]
+    public async Task<IActionResult> Edit(int id, [FromBody] Account data)
+    {
+        try
+        {
+            var acc = await _service.GetByIdAsync(id);
+            if (acc == null) return NotFound();
+
+            acc.Balance = data.Balance;
+            acc.AccountType = data.AccountType;
+            acc.CustomerId = data.CustomerId;
+
+            var updated = await _service.UpdateAsync(acc);
+            return Ok(updated);
+        }
+        catch (Exception e)
+        {
+            return StatusCode(500, new { error = e.Message });
+        }
+    }
+
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> Remove(int id)
+    {
+        try
+        {
+            var deleted = await _service.DeleteAsync(id);
+            return deleted ? NoContent() : NotFound();
+        }
+        catch (Exception e)
+        {
+            return StatusCode(500, new { error = e.Message });
         }
     }
 }
