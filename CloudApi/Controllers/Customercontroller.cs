@@ -4,7 +4,7 @@ using CloudApi.Entity;
 
 namespace BankingApi.Controllers
 {
-    [ApiController]
+    [ApiController] 
     [Route("api/[controller]")]
     public class CustomersController : ControllerBase
     {
@@ -33,7 +33,7 @@ namespace BankingApi.Controllers
                     var path = Path.Combine(uploads, fileName);
                     using var stream = new FileStream(path, FileMode.Create);
                     await file.CopyToAsync(stream);
-                    customer.ProfilePicturePath = $"/Uploads/{fileName}";
+                    customer.Avatar = $"/Uploads/{fileName}";
                 }
 
                 var created = await _customerService.CreateAsync(customer);
@@ -96,12 +96,12 @@ namespace BankingApi.Controllers
                     var path = Path.Combine(uploads, fileName);
                     using var stream = new FileStream(path, FileMode.Create);
                     await file.CopyToAsync(stream);
-                    if (!string.IsNullOrEmpty(existing.ProfilePicturePath))
+                    if (!string.IsNullOrEmpty(existing.Avatar))
                     {
-                        var oldPath = Path.Combine(_env.ContentRootPath, existing.ProfilePicturePath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
+                        var oldPath = Path.Combine(_env.ContentRootPath, existing.Avatar.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
                         if (System.IO.File.Exists(oldPath)) System.IO.File.Delete(oldPath);
                     }
-                    existing.ProfilePicturePath = $"/Uploads/{fileName}";
+                    existing.Avatar = $"/Uploads/{fileName}";
                 }
 
                 var updated = await _customerService.UpdateAsync(existing);
@@ -120,9 +120,9 @@ namespace BankingApi.Controllers
             {
                 var existing = await _customerService.GetByIdAsync(id);
                 if (existing == null) return NotFound();
-                if (!string.IsNullOrEmpty(existing.ProfilePicturePath))
+                if (!string.IsNullOrEmpty(existing.Avatar))
                 {
-                    var path = Path.Combine(_env.ContentRootPath, existing.ProfilePicturePath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
+                    var path = Path.Combine(_env.ContentRootPath, existing.Avatar.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
                     if (System.IO.File.Exists(path)) System.IO.File.Delete(path);
                 }
                 var deleted = await _customerService.DeleteAsync(id);

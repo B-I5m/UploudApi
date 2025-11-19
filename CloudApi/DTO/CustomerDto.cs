@@ -1,6 +1,6 @@
 ﻿namespace CloudApi.DTO;
 
-public class CreateCustomerDto
+public class CustomerDto
 {
     public string Name { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
